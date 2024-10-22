@@ -1,0 +1,57 @@
+import sqlite3
+from twilio.rest import Client
+
+account_sid = ''
+auth_token = ''
+client = Client(account_sid, auth_token)
+
+# Conectar ao banco de dados SQLite
+conn = sqlite3.connect('bancopsi.db')
+cursor = conn.cursor()
+
+# Função para buscar paciente e psicólogo
+def buscar_paciente_psicologo():
+    # Buscar um paciente da lista de espera
+    cursor.execute("SELECT nome, telefone FROM pacientes WHERE status = 'aguardando' LIMIT 1")
+    paciente = cursor.fetchone()
+
+    # Buscar um psicólogo disponível
+    cursor.execute("SELECT nome, telefone FROM psicologos WHERE status = 'disponivel' LIMIT 1")
+    psicologo = cursor.fetchone()
+
+    return paciente, psicologo
+
+# Função para enviar SMS para o paciente
+def enviar_sms_paciente(telefone, mensagem):
+    message = client.messages.create(
+        body=mensagem,
+        from_='+',
+        to=telefone
+    )
+    print(f'SMS enviado para {telefone}: {mensagem}')
+
+# Função principal para ligar paciente ao psicólogo
+def conectar_paciente_psicologo():
+    paciente, psicologo = buscar_paciente_psicologo()
+
+    if paciente and psicologo:
+        nome_paciente, telefone_paciente = paciente
+        nome_psicologo, telefone_psicologo = psicologo
+
+        # Mensagem a ser enviada para o paciente
+        mensagem = f"Olá {nome_paciente}, você foi conectado ao psicólogo {nome_psicologo}."
+        enviar_sms_paciente(telefone_paciente, mensagem)
+
+        # Atualizar status no banco de dados
+        cursor.execute("UPDATE pacientes SET status = 'atendido' WHERE nome = ?", (nome_paciente,))
+        cursor.execute("UPDATE psicologos SET status = 'atendendo' WHERE nome = ?", (nome_psicologo,))
+        conn.commit()
+
+        print(f'Paciente {nome_paciente} foi conectado ao psicólogo {nome_psicologo}.')
+    else:
+        print("Nenhum paciente ou psicólogo disponível no momento.")
+
+conectar_paciente_psicologo()
+
+# Fechar conexão com o banco de dados
+conn.close()
